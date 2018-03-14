@@ -35,15 +35,19 @@ if (isDev) {
     ]
   }
   config.devServer = {
+    // 兼容localhost，0.0.0.0，以及IP三种方式访问
     host: '0.0.0.0',
     port: '8888',
     contentBase: path.join(__dirname, '../dist'),
     hot: true,
+    // 网页什么时候出现遮罩警告层，这里配置为error时
     overlay: {
       errors: true
     },
     publicPath: '/public/',
     historyApiFallback: {
+      // 为我们自动配置了很多映射关系，
+      // 单页应用的所有url都会返回404，而该配置将所有前端返回的404请求都返回成historyApiFallback的index
       index: '/public/index.html'
     }
   }

@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import { BrowserRouter } from 'react-router-dom'
+import { Provider } from 'mobx-react'
 // react-hot-loader的热更新是依赖于webpack-dev-server(打包文件改变时reload刷新整个页面)
 // react-hot-loader会根据stateNode节点的更新对比，只更新改变的reactDom节点
 // 从而保留了未改变的state值，更适用于react的开发更新模式
@@ -8,6 +9,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { AppContainer } from 'react-hot-loader' // eslint-disable-line
 import App from './views/App'
 
+import appState from './store/app-state'
 // ReactDOM.hydrate(<App />, document.getElementById('root'))
 // 更新2：封装成可传递参数的方法
 // 将App挂载在document.body中，因为此时并没有模板，只有body可以使用
@@ -17,9 +19,11 @@ const root = document.getElementById('root')
 const render = (Component) => {
   ReactDOM.hydrate(
     <AppContainer>
-      <BrowserRouter>
-        <Component />
-      </BrowserRouter>
+      <Provider appState={appState}>
+        <BrowserRouter>
+          <Component />
+        </BrowserRouter>
+      </Provider>
     </AppContainer>,
     root,
   )
