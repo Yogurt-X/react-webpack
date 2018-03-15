@@ -49,6 +49,9 @@ if (isDev) {
       // 为我们自动配置了很多映射关系，
       // 单页应用的所有url都会返回404，而该配置将所有前端返回的404请求都返回成historyApiFallback的index
       index: '/public/index.html'
+    },
+    proxy: {
+      '/api': 'http://localhost:3333'
     }
   }
   config.plugins.push(new webpack.HotModuleReplacementPlugin())
