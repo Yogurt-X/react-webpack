@@ -1,3 +1,6 @@
+/**
+ * 客户端渲染
+ */
 import React from 'react'
 import ReactDOM from 'react-dom'
 import { BrowserRouter } from 'react-router-dom'
@@ -9,17 +12,21 @@ import { Provider } from 'mobx-react'
 import { AppContainer } from 'react-hot-loader' // eslint-disable-line
 import App from './views/App'
 
-import appState from './store/app-state'
+// 引入class 每次渲染生成一个新的实例
+import AppState from './store/app-state'
+
+const initialState = window.__INITIAL__STATE__ || {} // eslint-disable-line
 // ReactDOM.hydrate(<App />, document.getElementById('root'))
 // 更新2：封装成可传递参数的方法
 // 将App挂载在document.body中，因为此时并没有模板，只有body可以使用
 // 官方推荐在body中创建一个默认节点作为主dom
 const root = document.getElementById('root')
 
+// new AppState()拿到一个实例
 const render = (Component) => {
   ReactDOM.hydrate(
     <AppContainer>
-      <Provider appState={appState}>
+      <Provider appState={new AppState(initialState.appState)}>
         <BrowserRouter>
           <Component />
         </BrowserRouter>

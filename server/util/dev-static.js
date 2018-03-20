@@ -7,13 +7,16 @@ const webpack = require('webpack')
 const MemoryFs = require('memory-fs')
 // 代理
 const proxy = require('http-proxy-middleware')
+const serialize = require('serialize-javascript')
+const ejs = require('ejs')
+const asyncBootstrap = require('react-async-bootstrapper').default
 const ReactDomServer = require('react-dom/server')
 
 const serverConfig = require('../../build/webpack.config.server')
 
 const getTemplate = () => {
   return new Promise((resolve, reject) => {
-    axios.get('http://localhost:8888/public/index.html')
+    axios.get('http://localhost:8888/public/server.ejs')
       .then(res => {
         resolve(res.data)
       })
@@ -32,7 +35,8 @@ const serverCompiler = webpack(serverConfig)
 // webpack启动的配置项，以前使用fs读写的文件现在都用mfs来读写，速度快
 serverCompiler.outputFileSystem = mfs
 
-let serverBundle
+let serverBundle, createStoreMap
+
 serverCompiler.watch({}, (err, stats) => {
   if (err) throw err
   // webpack打包过程中输出的信息
@@ -52,7 +56,16 @@ serverCompiler.watch({}, (err, stats) => {
   m._compile(bundle, 'server-entry.js')
   // 模块是通过exports来挂载我们想要获得的东西
   serverBundle = m.exports.default
+  // 将createStoreMap方法拿进来（server-entry.js export）
+  createStoreMap = m.exports.createStoreMap
 })
+
+const getStoreState = (stores) => {
+  return Object.keys(stores).reduce((result, storeName) => {
+    result[storeName] = stores[storeName].toJson()
+    return result
+  }, {})
+}
 
 module.exports = function (app) {
   // 执行public下的请求就代理到8888端口
@@ -62,8 +75,31 @@ module.exports = function (app) {
 
   app.get('*', function (req, res) {
     getTemplate().then(template => {
-      const content = ReactDomServer.renderToString(serverBundle)
-      res.send(template.replace('<!-- app -->', content))
+      const routerContext = {}
+
+      const stores = createStoreMap()
+
+      // serverBundle现在不是一个可以直接渲染的内容，而是一个方法
+      const app = serverBundle(stores, routerContext, req.url)
+
+      asyncBootstrap(app).then(() => {
+        const state = getStoreState(stores)
+        const content = ReactDomServer.renderToString(app)
+        // 需要在renderToString之后才能拿到Redirect的上下文
+        if (routerContext.url) {
+          res.status(302).setHeader('Location', routerContext.url)
+          res.end()
+          return
+        }
+
+        // res.send(template.replace('<!-- app -->', content))
+        // serialize 序列化对象 state转化为字符串
+        const html = ejs.render(template, {
+          appString: content,
+          initialState: serialize(state)
+        })
+        res.send(html)
+      })
     })
   })
 }
