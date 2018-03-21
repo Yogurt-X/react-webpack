@@ -11,7 +11,7 @@ const serialize = require('serialize-javascript')
 const ejs = require('ejs')
 const asyncBootstrap = require('react-async-bootstrapper').default
 const ReactDomServer = require('react-dom/server')
-
+const Helmet = require('react-helmet').default
 const serverConfig = require('../../build/webpack.config.server')
 
 const getTemplate = () => {
@@ -25,7 +25,27 @@ const getTemplate = () => {
 }
 
 // 使用module的构造方法创建一个新的module->Module
-const Module = module.constructor
+// const Module = module.constructor
+// 修改
+const NativeModule = require('module')
+const vm = require('vm')
+const getModuleFromString = (bundle, filename) => {
+  const m = {exports: {}}
+  // wrap会进行文件的包裹，包装成类似于这样的代码
+  // '(function (exports, require, module, __filename, __dirname) {
+  // '...bundle code'});`
+  const wrapper = NativeModule.wrap(bundle)
+  // 创建一个 vm.Script 实例, 编译要执行的代码
+  const script = new vm.Script(wrapper, {
+    filename: filename,
+    displayErrors: true
+  })
+  const result = script.runInThisContext()
+  // 第一个参数 m.exports去调用result代码
+  // require 是当前环境的require，解决了不能require的问题
+  result.call(m.exports, m.exports, require, m)
+  return m
+}
 
 const mfs = new MemoryFs()
 
@@ -51,9 +71,10 @@ serverCompiler.watch({}, (err, stats) => {
   // webpack输出的内容的是一个string的内容 并不是可以在js中可以使用的模块的内容 使用module转换
   const bundle = mfs.readFileSync(bundlePath, 'utf-8')
   // 解析string内容 生成新的模块
-  const m = new Module()
-  // 需要指定module名字，因为require时是通过文件名找到的
-  m._compile(bundle, 'server-entry.js')
+  // const m = new Module()
+  // // 需要指定module名字，因为require时是通过文件名找到的
+  // m._compile(bundle, 'server-entry.js')
+  const m = getModuleFromString(bundle, 'server-entry.js')
   // 模块是通过exports来挂载我们想要获得的东西
   serverBundle = m.exports.default
   // 将createStoreMap方法拿进来（server-entry.js export）
@@ -83,6 +104,7 @@ module.exports = function (app) {
       const app = serverBundle(stores, routerContext, req.url)
 
       asyncBootstrap(app).then(() => {
+        const helmet = Helmet.rewind()
         const state = getStoreState(stores)
         const content = ReactDomServer.renderToString(app)
         // 需要在renderToString之后才能拿到Redirect的上下文
@@ -96,7 +118,11 @@ module.exports = function (app) {
         // serialize 序列化对象 state转化为字符串
         const html = ejs.render(template, {
           appString: content,
-          initialState: serialize(state)
+          initialState: serialize(state),
+          meta: helmet.meta.toString(),
+          title: helmet.title.toString(),
+          style: helmet.style.toString(),
+          link: helmet.link.toString()
         })
         res.send(html)
       })
