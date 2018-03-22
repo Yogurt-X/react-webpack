@@ -2,7 +2,8 @@ const express = require('express')
 const favicon = require('serve-favicon')
 const bodyParser = require('body-parser')
 const session = require('express-session')
-const ReactSSR = require('react-dom/server')
+// const ReactSSR = require('react-dom/server')
+const serverRender = require('./util/server-render')
 const fs = require('fs')
 const path = require('path')
 
@@ -31,18 +32,27 @@ app.use('/api/user', require('./util/handle-login'))
 app.use('/api', require('./util/proxy'))
 
 if (!isDev) {
-  const serverEntry = require('../dist/server-entry').default
-  const template = fs.readFileSync(path.join(__dirname, '../dist/index.html'), 'utf8')
+  // 正式环境
+  console.log('!isDev')
+  const serverEntry = require('../dist/server-entry')
+  const template = fs.readFileSync(path.join(__dirname, '../dist/server.ejs'), 'utf8')
   // 使用express来处理静态文件，硬盘没有静态文件夹生成，在内存中。
   app.use('/public', express.static(path.join(__dirname, '../dist')))
-  app.get('*', function (req, res) {
-    const appString = ReactSSR.renderToString(serverEntry)
-    res.send(template.replace('<!-- app -->', appString))
+  app.get('*', function (req, res, next) {
+    serverRender(serverEntry, template, req, res).catch(next)
+    // const appString = ReactSSR.renderToString(serverEntry)
+    // res.send(template.replace('<!-- app -->', appString))
   })
 } else {
+  console.log('isDev')
   const devStatic = require('./util/dev-static')
   devStatic(app)
 }
+
+app.use(function (error, req, res, next) {
+  console.log(error)
+  res.status(500).send(error)
+})
 
 app.listen(3333, function () {
   console.log('server is listening on 3333')
